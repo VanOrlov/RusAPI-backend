@@ -10,6 +10,7 @@ import {
   Get,
   Req,
   NotFoundException,
+  Patch,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { type Request, type Response } from 'express';
@@ -17,6 +18,8 @@ import { AuthService } from './auth.service';
 import { CreateUserDto } from '../user/dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { UsersService } from '../user/services/user.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { type AuthRequest } from './dto/auth-request';
 
 @Controller('auth')
 export class AuthController {
@@ -90,7 +93,7 @@ export class AuthController {
   @UseGuards(AuthGuard('jwt'))
   @Post('logout')
   async logout(
-    @Req() req: Request & { user: { id: string } },
+    @Req() req: AuthRequest,
     @Res({ passthrough: true }) res: Response,
   ) {
     // 1. Удаляем refresh-токен из базы данных
@@ -108,7 +111,7 @@ export class AuthController {
 
   @Post('refresh')
   async refreshTokens(
-    @Req() req: Request,
+    @Req() req: AuthRequest,
     @Res({ passthrough: true }) res: Response,
   ) {
     // 1. Достаем токен из куки
@@ -122,15 +125,26 @@ export class AuthController {
     // 2. Передаем в сервис и получаем новую пару
     const tokens = await this.authService.refreshTokens(refreshToken);
 
-    // 3. Устанавливаем новую куку с новым refresh-токеном
     res.cookie('refreshToken', tokens.refreshToken, {
       httpOnly: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 дней
+      maxAge: 7 * 24 * 60 * 60 * 1000,
       sameSite: 'strict',
       secure: true,
     });
 
-    // 4. Возвращаем accessToken на фронтенд
     return { accessToken: tokens.accessToken };
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Patch('update-password')
+  async updatePassword(
+    @Req() req: AuthRequest,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    const userId = req.user.sub;
+
+    await this.authService.changePassword(userId, dto);
+
+    return { message: 'Пароль успешно изменен' };
   }
 }

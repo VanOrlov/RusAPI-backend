@@ -59,4 +59,10 @@ export class UsersService {
   async findFullById(id: string): Promise<User | null> {
     return this.userRepository.findOne({ where: { id } });
   }
+
+  async updatePassword(userId: string, newPasswordHash: string): Promise<void> {
+    await this.userRepository.update(userId, {
+      passwordHash: newPasswordHash,
+    });
+  }
 }

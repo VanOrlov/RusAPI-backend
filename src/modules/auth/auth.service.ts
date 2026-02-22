@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
@@ -6,6 +10,7 @@ import { UsersService } from '../user/services/user.service';
 import { CreateUserDto } from '../user/dto/create-user.dto';
 import { User } from '../../entities/user/user.entity';
 import { JwtPayload } from './strategies/jwt.strategy';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -150,5 +155,31 @@ export class AuthService {
       // Если токен протух физически (прошло 7 дней) или подделан
       throw new UnauthorizedException('Токен недействителен', e);
     }
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
+    // 1. Достаем юзера со ВСЕМИ полями (помнишь, мы делали findFullById?)
+    const user = await this.usersService.findFullById(userId);
+
+    if (!user || !user.passwordHash) {
+      throw new UnauthorizedException('Пользователь не найден');
+    }
+
+    // 2. Проверяем, совпадает ли старый пароль с текущим хэшем в базе
+    const isOldPasswordValid = await argon2.verify(
+      user.passwordHash,
+      dto.oldPassword,
+    );
+
+    if (!isOldPasswordValid) {
+      // Выкидываем BadRequest, текст которого поймает наш фронтенд!
+      throw new BadRequestException('Неверный текущий пароль');
+    }
+
+    // 3. Хэшируем новый пароль
+    const newPasswordHash = await argon2.hash(dto.newPassword);
+
+    // 4. Сохраняем новый хэш в базу
+    await this.usersService.updatePassword(user.id, newPasswordHash);
   }
 }
