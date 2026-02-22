@@ -79,7 +79,7 @@ export class AuthController {
   @Get('me')
   async getProfile(
     @Req()
-    req: Request & { user: { id: string; email: string; role: string } },
+    req: AuthRequest,
   ) {
     const user = await this.usersService.findById(req.user.id);
 
@@ -141,7 +141,7 @@ export class AuthController {
     @Req() req: AuthRequest,
     @Body() dto: ChangePasswordDto,
   ) {
-    const userId = req.user.sub;
+    const userId = req.user.id;
 
     await this.authService.changePassword(userId, dto);
 

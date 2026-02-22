@@ -4,6 +4,7 @@ import { AuthProvider, User } from 'src/entities/user/user.entity';
 import { Repository } from 'typeorm';
 import * as argon2 from 'argon2';
 import { CreateUserDto } from '../dto/create-user.dto';
+import { UpdateUserDto } from '../dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
@@ -64,5 +65,15 @@ export class UsersService {
     await this.userRepository.update(userId, {
       passwordHash: newPasswordHash,
     });
+  }
+
+  async changeUserData(
+    userId: string,
+    dto: UpdateUserDto,
+  ): Promise<Omit<User, 'passwordHash' | 'refreshTokenHash'> | null> {
+    await this.userRepository.update(userId, {
+      name: dto.name,
+    });
+    return this.findById(userId);
   }
 }
