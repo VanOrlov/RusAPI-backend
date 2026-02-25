@@ -1,3 +1,4 @@
+import { Project } from 'src/modules/project/entities/project.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -5,6 +6,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  OneToMany,
 } from 'typeorm';
 
 export enum AuthProvider {
@@ -107,6 +109,9 @@ export class User {
 
   @Column({ type: 'timestamp', nullable: true })
   lastLoginAt: Date;
+
+  @OneToMany(() => Project, (project) => project.user)
+  projects: Project[];
 
   // ==========================================
   // БЛОК 4: АУДИТ И УДАЛЕНИЕ
