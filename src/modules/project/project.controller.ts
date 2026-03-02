@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Req,
+  UseGuards,
+  Param,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { ProjectService } from './project.service';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -24,5 +32,11 @@ export class ProjectController {
   async findAll(@Req() req: AuthRequest) {
     const userId = req.user.id;
     return await this.projectService.findAllByUser(userId);
+  }
+
+  @Get(':id')
+  async findOne(@Req() req: AuthRequest, @Param('id') id: string) {
+    const userId = req.user.id;
+    return await this.projectService.findOne(id, userId);
   }
 }

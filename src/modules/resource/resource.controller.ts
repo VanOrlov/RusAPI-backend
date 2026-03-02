@@ -1,4 +1,35 @@
-import { Controller } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Req,
+  UseGuards,
+  Get,
+  Param,
+} from '@nestjs/common';
+import { ResourceService } from './resource.service';
+import { CreateResourceDto } from './dto/create-resource.dto';
+import { AuthGuard } from '@nestjs/passport';
+import { type AuthRequest } from '../auth/dto/auth-request';
 
-@Controller('resource')
-export class ResourceController {}
+@UseGuards(AuthGuard('jwt'))
+@Controller('resources')
+export class ResourceController {
+  constructor(private readonly resourceService: ResourceService) {}
+
+  @Post()
+  async create(@Req() req: AuthRequest, @Body() dto: CreateResourceDto) {
+    const userId = req.user.id;
+    return await this.resourceService.create(userId, dto);
+  }
+
+  // Получить все ресурсы конкретного проекта (для сайдбара)
+  @Get('project/:nanoId')
+  async findAllByProject(
+    @Req() req: AuthRequest,
+    @Param('nanoId') nanoId: string,
+  ) {
+    const userId = req.user.id;
+    return await this.resourceService.findAllByProject(nanoId, userId);
+  }
+}

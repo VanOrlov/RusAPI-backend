@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { nanoid } from 'nanoid';
@@ -33,5 +33,22 @@ export class ProjectService {
       where: { user: { id: userId } },
       order: { createdAt: 'DESC' }, // Свежие проекты сверху
     });
+  }
+
+  async findOne(projectNanoId: string, userId: string): Promise<Project> {
+    const project = await this.projectRepository.findOne({
+      where: {
+        nanoId: projectNanoId,
+        user: { id: userId },
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Проект не найден или у вас нет к нему доступа',
+      );
+    }
+
+    return project;
   }
 }
