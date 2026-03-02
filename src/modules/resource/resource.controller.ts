@@ -7,6 +7,7 @@ import {
   Get,
   Param,
   Patch,
+  Query,
 } from '@nestjs/common';
 import { ResourceService } from './resource.service';
 import { CreateResourceDto } from './dto/create-resource.dto';
@@ -44,5 +45,23 @@ export class ResourceController {
   ) {
     const userId = req.user.id;
     return await this.resourceService.updateSchema(resourceId, userId, dto);
+  }
+
+  @Post(':id/generate')
+  async generateData(
+    @Req() req: AuthRequest,
+    @Param('id') resourceId: string,
+    // Позволим фронтенду передавать количество через query параметр (например, ?count=20)
+    @Query('count') count?: string,
+  ) {
+    const userId = req.user.id;
+    // Если count не передали, по умолчанию сгенерируем 10
+    const recordsCount = count ? parseInt(count, 10) : 10;
+
+    return await this.resourceService.generateData(
+      resourceId,
+      userId,
+      recordsCount,
+    );
   }
 }

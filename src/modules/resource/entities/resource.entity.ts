@@ -18,7 +18,10 @@ export class Resource {
 
   // Схема полей эндпоинта (сохраняем как JSON массив объектов)
   @Column({ type: 'jsonb', default: [] })
-  schema: any;
+  schema: {
+    name: string;
+    type: `${string}.${string}`;
+  }[];
 
   // Сгенерированные данные для эндпоинта (JSON массив)
   @Column({ type: 'jsonb', default: [] })

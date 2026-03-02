@@ -6,6 +6,7 @@ import { UserModule } from './modules/user/user.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ResourceModule } from './modules/resource/resource.module';
 import { ProjectModule } from './modules/project/project.module';
+import { MockModule } from './modules/mock/mock.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { ProjectModule } from './modules/project/project.module';
     AuthModule,
     ProjectModule,
     ResourceModule,
+    MockModule,
   ],
 })
 export class AppModule {}

@@ -18,7 +18,7 @@ export class SchemaFieldDto {
 
   @IsString()
   @IsNotEmpty()
-  type: string;
+  type: `${string}.${string}`;
 }
 
 export class UpdateSchemaDto {
