@@ -6,11 +6,13 @@ import {
   UseGuards,
   Get,
   Param,
+  Patch,
 } from '@nestjs/common';
 import { ResourceService } from './resource.service';
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { type AuthRequest } from '../auth/dto/auth-request';
+import { UpdateSchemaDto } from './dto/update-schema.dto';
 
 @UseGuards(AuthGuard('jwt'))
 @Controller('resources')
@@ -31,5 +33,16 @@ export class ResourceController {
   ) {
     const userId = req.user.id;
     return await this.resourceService.findAllByProject(nanoId, userId);
+  }
+
+  // НОВЫЙ РОУТ ДЛЯ ОБНОВЛЕНИЯ СХЕМЫ
+  @Patch(':id/schema')
+  async updateSchema(
+    @Req() req: AuthRequest,
+    @Param('id') resourceId: string,
+    @Body() dto: UpdateSchemaDto,
+  ) {
+    const userId = req.user.id;
+    return await this.resourceService.updateSchema(resourceId, userId, dto);
   }
 }

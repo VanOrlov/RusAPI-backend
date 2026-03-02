@@ -8,6 +8,7 @@ import { Repository } from 'typeorm';
 import { Resource } from './entities/resource.entity';
 import { Project } from '../project/entities/project.entity';
 import { CreateResourceDto } from './dto/create-resource.dto';
+import { UpdateSchemaDto } from './dto/update-schema.dto';
 
 @Injectable()
 export class ResourceService {
@@ -63,5 +64,34 @@ export class ResourceService {
       where: { project: { id: project.id } },
       order: { createdAt: 'ASC' }, // Старые эндпоинты сверху, новые снизу
     });
+  }
+
+  async updateSchema(
+    resourceId: string,
+    userId: string,
+    dto: UpdateSchemaDto,
+  ): Promise<Resource> {
+    // 1. Ищем ресурс и подтягиваем его проект и владельца проекта
+    const resource = await this.resourceRepository.findOne({
+      where: { id: resourceId },
+      relations: ['project', 'project.user'], // Магия TypeORM для проверки прав
+    });
+
+    if (!resource) {
+      throw new NotFoundException('Эндпоинт не найден');
+    }
+
+    // 2. Строгая проверка безопасности
+    if (resource.project.user.id !== userId) {
+      throw new ForbiddenException(
+        'У вас нет прав на редактирование этого эндпоинта',
+      );
+    }
+
+    // 3. Обновляем схему
+    resource.schema = dto.schema;
+
+    // 4. Сохраняем и возвращаем обновленный ресурс
+    return await this.resourceRepository.save(resource);
   }
 }
