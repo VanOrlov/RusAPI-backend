@@ -9,18 +9,18 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 async function bootstrap() {
   const config: NestApplicationOptions = {
     cors: {
-      origin: /https?:\//,
+      origin: true, // /https?:\//,
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-      preflightContinue: false,
-      optionsSuccessStatus: 204,
+      //preflightContinue: false,
+      //optionsSuccessStatus: 204,
       credentials: true,
     },
   };
 
-  config.httpsOptions = {
-    key: fs.readFileSync('./localhost-key.pem'),
-    cert: fs.readFileSync('./localhost.pem'),
-  };
+  // config.httpsOptions = {
+  //   key: fs.readFileSync('./localhost-key.pem'),
+  //   cert: fs.readFileSync('./localhost.pem'),
+  // };
 
   const app = await NestFactory.create<NestExpressApplication>(
     AppModule,
@@ -29,6 +29,6 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
   app.use(cookieParser());
   app.set('trust proxy', 1);
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }
 bootstrap();

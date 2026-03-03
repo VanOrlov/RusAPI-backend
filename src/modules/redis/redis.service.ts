@@ -59,15 +59,12 @@ export class RedisService {
     return JSON.parse(data) as RedisSessionData;
   }
 
-  async updateSession(
-    sessionId: string,
-    newHash: string,
-    expiresInSec: number,
-  ) {
+  async updateSession(sessionId: string, newHash: string) {
     const sessionStr = (await this.redisClient.get(`session:${sessionId}`)) as
       | string
       | null;
     if (sessionStr) {
+      const expiresInSec = 7 * 24 * 60 * 60;
       const sessionData = JSON.parse(sessionStr) as RedisSessionData;
       sessionData.refreshTokenHash = newHash;
       sessionData.lastActive = new Date().toISOString();
@@ -78,6 +75,27 @@ export class RedisService {
         'EX',
         expiresInSec,
       );
+    }
+  }
+
+  async updateSessionLastActive(sessionId: string) {
+    const sessionStr = (await this.redisClient.get(`session:${sessionId}`)) as
+      | string
+      | null;
+    if (sessionStr) {
+      const expiresInSec = 7 * 24 * 60 * 60;
+      const sessionData = JSON.parse(sessionStr) as RedisSessionData;
+      sessionData.lastActive = new Date().toISOString();
+
+      await this.redisClient.set(
+        `session:${sessionId}`,
+        JSON.stringify(sessionData),
+        'EX',
+        expiresInSec,
+      );
+      return true;
+    } else {
+      return false;
     }
   }
 
@@ -101,8 +119,7 @@ export class RedisService {
       if (sessionStr) {
         const sessionData = JSON.parse(sessionStr) as RedisSessionData;
 
-        // Создаем новый объект без хэша для безопасной отдачи
-        const { refreshTokenHash: _, ...safeSessionData } = sessionData;
+        const { refreshTokenHash, ...safeSessionData } = sessionData;
         activeSessions.push(safeSessionData);
       } else {
         await this.redisClient.srem(`user_sessions:${userId}`, id);

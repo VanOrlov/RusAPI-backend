@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -39,12 +40,25 @@ export class ResourceService {
       );
     }
 
+    const existingResource = await this.resourceRepository.findOne({
+      where: {
+        name: dto.name,
+        project: { id: project.id }, // Ищем строго внутри текущего проекта
+      },
+    });
+
+    if (existingResource) {
+      throw new ConflictException(
+        `Эндпоинт с именем "${dto.name}" уже существует в этом проекте`,
+      );
+    }
+
     // 3. Создаем новый ресурс
     const newResource = this.resourceRepository.create({
       name: dto.name,
-      schema: [], // По умолчанию схема пустая (настроим позже в конструкторе)
-      data: [], // Данные тоже пустые
-      project: { id: project.id }, // Привязываем к внутреннему UUID проекта
+      schema: [],
+      data: [],
+      project: { id: project.id },
     });
 
     return await this.resourceRepository.save(newResource);

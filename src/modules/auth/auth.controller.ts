@@ -13,6 +13,8 @@ import {
   Patch,
   Ip,
   Headers,
+  Delete,
+  Param,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { type Response } from 'express';
@@ -23,12 +25,14 @@ import { UsersService } from '../user/services/user.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { type AuthRequest } from './dto/auth-request';
 import { SkipThrottle } from '@nestjs/throttler';
+import { RedisService } from '../redis/redis.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly usersService: UsersService,
+    private readonly redisService: RedisService,
   ) {}
 
   @SkipThrottle()
@@ -50,8 +54,8 @@ export class AuthController {
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      sameSite: 'strict',
-      secure: true,
+      sameSite: process.env.MODE === 'DEV' ? 'lax' : 'strict',
+      secure: process.env.MODE === 'DEV' ? false : true,
     });
 
     return response;
@@ -79,11 +83,26 @@ export class AuthController {
   @SkipThrottle()
   @UseGuards(AuthGuard('jwt'))
   @Get('me')
-  async getProfile(@Req() req: AuthRequest) {
+  async getProfile(
+    @Req() req: AuthRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const user = await this.usersService.findById(req.user.id);
 
     if (!user) {
       throw new NotFoundException('Пользователь не найден');
+    }
+    const isSession = await this.redisService.updateSessionLastActive(
+      req.user.sessionId,
+    );
+
+    if (!isSession) {
+      res.clearCookie('refreshToken', {
+        httpOnly: true,
+        sameSite: process.env.MODE === 'DEV' ? 'lax' : 'strict',
+        secure: process.env.MODE === 'DEV' ? false : true,
+      });
+      return;
     }
 
     return user;
@@ -96,13 +115,12 @@ export class AuthController {
     @Req() req: AuthRequest,
     @Res({ passthrough: true }) res: Response,
   ) {
-    // 2. Добавили req.user.sessionId (теперь сервис знает, какую сессию удалять)
     await this.authService.logout(req.user.id, req.user.sessionId);
 
     res.clearCookie('refreshToken', {
       httpOnly: true,
-      sameSite: 'strict',
-      secure: true,
+      sameSite: process.env.MODE === 'DEV' ? 'lax' : 'strict',
+      secure: process.env.MODE === 'DEV' ? false : true,
     });
 
     return { message: 'Выход выполнен успешно' };
@@ -120,16 +138,27 @@ export class AuthController {
       throw new UnauthorizedException('Refresh токен не найден');
     }
 
-    const tokens = await this.authService.refreshTokens(refreshToken);
+    try {
+      // Пытаемся обновить токены
+      const tokens = await this.authService.refreshTokens(refreshToken);
 
-    res.cookie('refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      sameSite: 'strict',
-      secure: true,
-    });
+      res.cookie('refreshToken', tokens.refreshToken, {
+        httpOnly: true,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        sameSite: process.env.MODE === 'DEV' ? 'lax' : 'strict',
+        secure: process.env.MODE === 'DEV' ? false : true,
+      });
 
-    return { accessToken: tokens.accessToken };
+      return { accessToken: tokens.accessToken };
+    } catch (error) {
+      res.clearCookie('refreshToken', {
+        httpOnly: true,
+        sameSite: process.env.MODE === 'DEV' ? 'lax' : 'strict',
+        secure: process.env.MODE === 'DEV' ? false : true,
+      });
+
+      throw error;
+    }
   }
 
   @SkipThrottle()
@@ -142,5 +171,28 @@ export class AuthController {
     const userId = req.user.id;
     await this.authService.changePassword(userId, dto);
     return { message: 'Пароль успешно изменен' };
+  }
+
+  @SkipThrottle()
+  @UseGuards(AuthGuard('jwt'))
+  @Get('sessions')
+  async getSessions(@Req() req: AuthRequest) {
+    const sessions = await this.redisService.getAllUserSessions(req.user.id);
+
+    return sessions.map((session) => ({
+      ...session,
+      isCurrent: session.sessionId === req.user.sessionId,
+    }));
+  }
+
+  @SkipThrottle()
+  @UseGuards(AuthGuard('jwt'))
+  @Delete('sessions/:sessionId')
+  async terminateSession(
+    @Req() req: AuthRequest,
+    @Param('sessionId') sessionId: string,
+  ) {
+    await this.authService.logout(req.user.id, sessionId);
+    return { message: 'Сессия успешно завершена' };
   }
 }

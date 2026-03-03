@@ -175,9 +175,8 @@ export class AuthService {
         sessionId,
       );
       const newHash = await argon2.hash(tokens.refreshToken);
-      const expiresInSec = 7 * 24 * 60 * 60;
 
-      await this.redisService.updateSession(sessionId, newHash, expiresInSec);
+      await this.redisService.updateSession(sessionId, newHash);
 
       return tokens;
     } catch (e) {
