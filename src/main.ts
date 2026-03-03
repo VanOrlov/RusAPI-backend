@@ -4,6 +4,7 @@ import { NestApplicationOptions } from '@nestjs/common';
 
 import * as fs from 'fs';
 import cookieParser from 'cookie-parser';
+import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
   const config: NestApplicationOptions = {
@@ -21,9 +22,13 @@ async function bootstrap() {
     cert: fs.readFileSync('./localhost.pem'),
   };
 
-  const app = await NestFactory.create(AppModule, config);
+  const app = await NestFactory.create<NestExpressApplication>(
+    AppModule,
+    config,
+  );
   app.setGlobalPrefix('api');
   app.use(cookieParser());
+  app.set('trust proxy', 1);
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

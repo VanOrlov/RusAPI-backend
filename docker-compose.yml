@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  # 1. База данных PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: rusapi_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ivanorlov
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rusapi
+    ports:
+      - '5433:5432'
+    volumes:
+      # Сохраняем данные базы
+      - rusapi_postgres_data:/var/lib/postgresql/data
+
+  # 2. Redis для сессий и Rate Limiting
+  redis:
+    image: redis:7-alpine
+    container_name: rusapi_redis
+    restart: always
+    ports:
+      - '6379:6379'
+    volumes:
+      # Сохраняем данные кэша
+      - rusapi_redis_data:/data
+    command: redis-server --save 60 1 --loglevel warning
+
+volumes:
+  # Объявляем тома для хранения данных
+  rusapi_postgres_data:
+  rusapi_redis_data:

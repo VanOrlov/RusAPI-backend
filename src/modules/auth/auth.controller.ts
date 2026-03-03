@@ -11,15 +11,18 @@ import {
   Req,
   NotFoundException,
   Patch,
+  Ip,
+  Headers,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { type Request, type Response } from 'express';
+import { type Response } from 'express';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from '../user/dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { UsersService } from '../user/services/user.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { type AuthRequest } from './dto/auth-request';
+import { SkipThrottle } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
@@ -28,41 +31,20 @@ export class AuthController {
     private readonly usersService: UsersService,
   ) {}
 
+  @SkipThrottle()
   @UsePipes(new ValidationPipe())
   @Post('register')
   async register(
     @Body() dto: CreateUserDto,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent: string,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { refreshToken, ...response } = await this.authService.register(dto);
-
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 дней
-      sameSite: 'strict',
-      secure: true,
-    });
-
-    return response;
-  }
-
-  @UsePipes(new ValidationPipe())
-  @Post('login')
-  async login(
-    @Body() dto: LoginDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const { email, password } = dto;
-    const user = await this.authService.validateUser(email, password);
-
-    if (!user) {
-      throw new UnauthorizedException('Неверный email или пароль'); // Лучше не уточнять, что именно неверно
-    }
-
-    const { refreshToken, ...response } = await this.authService.login(
-      user.id,
-      user.email,
-      user.role,
+    // 1. Прокидываем ip и userAgent в сервис при регистрации
+    const { refreshToken, ...response } = await this.authService.register(
+      dto,
+      ip,
+      userAgent || '',
     );
 
     res.cookie('refreshToken', refreshToken, {
@@ -75,12 +57,35 @@ export class AuthController {
     return response;
   }
 
+  @SkipThrottle()
+  @UsePipes(new ValidationPipe())
+  @Post('login')
+  async login(
+    @Body() loginDto: LoginDto,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent: string,
+  ) {
+    const user = await this.authService.validateUser(
+      loginDto.email,
+      loginDto.password,
+    );
+    if (!user) {
+      throw new NotFoundException('Пользователь не найден');
+    }
+
+    return this.authService.login(
+      user.id,
+      user.email,
+      user.role,
+      ip,
+      userAgent || '',
+    );
+  }
+
+  @SkipThrottle()
   @UseGuards(AuthGuard('jwt'))
   @Get('me')
-  async getProfile(
-    @Req()
-    req: AuthRequest,
-  ) {
+  async getProfile(@Req() req: AuthRequest) {
     const user = await this.usersService.findById(req.user.id);
 
     if (!user) {
@@ -90,16 +95,16 @@ export class AuthController {
     return user;
   }
 
+  @SkipThrottle()
   @UseGuards(AuthGuard('jwt'))
   @Post('logout')
   async logout(
     @Req() req: AuthRequest,
     @Res({ passthrough: true }) res: Response,
   ) {
-    // 1. Удаляем refresh-токен из базы данных
-    await this.authService.logout(req.user.id);
+    // 2. Добавили req.user.sessionId (теперь сервис знает, какую сессию удалять)
+    await this.authService.logout(req.user.id, req.user.sessionId);
 
-    // 2. Очищаем куку с refresh-токеном
     res.clearCookie('refreshToken', {
       httpOnly: true,
       sameSite: 'strict',
@@ -109,20 +114,18 @@ export class AuthController {
     return { message: 'Выход выполнен успешно' };
   }
 
+  @SkipThrottle()
   @Post('refresh')
   async refreshTokens(
     @Req() req: AuthRequest,
     @Res({ passthrough: true }) res: Response,
   ) {
-    // 1. Достаем токен из куки
-    // ВАЖНО: для этого в main.ts должен быть подключен cookie-parser!
     const refreshToken = req.cookies['refreshToken'] as string;
 
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh токен не найден');
     }
 
-    // 2. Передаем в сервис и получаем новую пару
     const tokens = await this.authService.refreshTokens(refreshToken);
 
     res.cookie('refreshToken', tokens.refreshToken, {
@@ -135,6 +138,7 @@ export class AuthController {
     return { accessToken: tokens.accessToken };
   }
 
+  @SkipThrottle()
   @UseGuards(AuthGuard('jwt'))
   @Patch('update-password')
   async updatePassword(
@@ -142,9 +146,7 @@ export class AuthController {
     @Body() dto: ChangePasswordDto,
   ) {
     const userId = req.user.id;
-
     await this.authService.changePassword(userId, dto);
-
     return { message: 'Пароль успешно изменен' };
   }
 }

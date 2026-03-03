@@ -39,21 +39,13 @@ export class UsersService {
     return this.userRepository.findOne({ where: { email } });
   }
 
-  async updateRefreshToken(userId: string, refreshTokenHash: string | null) {
-    await this.userRepository.update(userId, {
-      refreshTokenHash,
-    });
-  }
-
-  async findById(
-    id: string,
-  ): Promise<Omit<User, 'passwordHash' | 'refreshTokenHash'> | null> {
+  async findById(id: string): Promise<Omit<User, 'passwordHash'> | null> {
     const user = await this.userRepository.findOne({ where: { id } });
 
     if (!user) return null;
 
     // Отрезаем секретные данные перед отправкой на фронт
-    const { passwordHash, refreshTokenHash, ...safeUser } = user;
+    const { passwordHash: _, ...safeUser } = user;
     return safeUser;
   }
 
@@ -70,7 +62,7 @@ export class UsersService {
   async changeUserData(
     userId: string,
     dto: UpdateUserDto,
-  ): Promise<Omit<User, 'passwordHash' | 'refreshTokenHash'> | null> {
+  ): Promise<Omit<User, 'passwordHash'> | null> {
     await this.userRepository.update(userId, {
       name: dto.name,
     });

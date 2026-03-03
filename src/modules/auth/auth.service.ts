@@ -11,6 +11,8 @@ import { CreateUserDto } from '../user/dto/create-user.dto';
 import { User } from '../../entities/user/user.entity';
 import { JwtPayload } from './strategies/jwt.strategy';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { RedisService } from '../redis/redis.service';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AuthService {
@@ -18,16 +20,33 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
   ) {}
 
-  async register(createUserDto: CreateUserDto) {
+  // 1. Исправлена регистрация: теперь она тоже создает сессию в Redis
+  async register(createUserDto: CreateUserDto, ip: string, userAgent: string) {
     const newUser = await this.usersService.create(createUserDto);
+    const sessionId = uuidv4();
+
     const tokens = await this.getTokens(
       newUser.id,
       newUser.email,
       newUser.role,
+      sessionId,
     );
-    await this.updateRefreshToken(newUser.id, tokens.refreshToken);
+
+    const hash = await argon2.hash(tokens.refreshToken);
+    const expiresInSec = 7 * 24 * 60 * 60;
+
+    await this.redisService.createSession(
+      newUser.id,
+      sessionId,
+      hash,
+      ip,
+      userAgent,
+      expiresInSec,
+    );
+
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
@@ -40,25 +59,36 @@ export class AuthService {
     };
   }
 
-  async login(userId: string, email: string, role: string) {
-    const tokens = await this.getTokens(userId, email, role);
-    await this.updateRefreshToken(userId, tokens.refreshToken);
+  async login(
+    userId: string,
+    email: string,
+    role: string,
+    ip: string,
+    userAgent: string,
+  ) {
+    const sessionId = uuidv4();
+    const tokens = await this.getTokens(userId, email, role, sessionId);
+
+    const hash = await argon2.hash(tokens.refreshToken);
+    const expiresInSec = 7 * 24 * 60 * 60;
+
+    await this.redisService.createSession(
+      userId,
+      sessionId,
+      hash,
+      ip,
+      userAgent,
+      expiresInSec,
+    );
 
     const user = await this.usersService.userRepository.findOne({
       where: { id: userId },
-    }); // Получаем актуальные данные пользователя, если нужно, или передаем их аргументами.
-    // Оптимизация: можно передавать имя и роль сразу в аргументы, чтобы не делать select,
-    // но для чистоты и возврата полного объекта user иногда проще сделать select или вернуть то что есть.
+    });
 
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      user: {
-        id: userId,
-        email: email,
-        role: role,
-        name: user?.name, // Добавим имя, это полезно для фронта
-      },
+      user: { id: userId, email, role, name: user?.name },
     };
   }
 
@@ -74,52 +104,37 @@ export class AuthService {
     ) {
       const result = { ...user };
       delete (result as Partial<User>).passwordHash;
-      delete (result as Partial<User>).refreshTokenHash;
       return result;
     }
     return null;
   }
 
-  async updateRefreshToken(userId: string, refreshToken: string) {
-    const hash = await argon2.hash(refreshToken);
-    await this.usersService.updateRefreshToken(userId, hash);
-  }
+  // МЕТОД updateRefreshToken ПОЛНОСТЬЮ УДАЛЕН - он больше не нужен
 
-  async getTokens(userId: string, email: string, role: string) {
+  async getTokens(
+    userId: string,
+    email: string,
+    role: string,
+    sessionId: string,
+  ) {
+    const payload = { sub: userId, email, role, sessionId };
+
     const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(
-        {
-          sub: userId,
-          email,
-          role,
-        },
-        {
-          secret: this.configService.get<string>('jwt.accessSecret'),
-          expiresIn: '15m',
-        },
-      ),
-      this.jwtService.signAsync(
-        {
-          sub: userId,
-          email,
-          role,
-        },
-        {
-          secret: this.configService.get<string>('jwt.refreshSecret'),
-          expiresIn: '7d',
-        },
-      ),
+      this.jwtService.signAsync(payload, {
+        secret: this.configService.get<string>('jwt.accessSecret'),
+        expiresIn: '15m',
+      }),
+      this.jwtService.signAsync(payload, {
+        secret: this.configService.get<string>('jwt.refreshSecret'),
+        expiresIn: '7d',
+      }),
     ]);
 
-    return {
-      accessToken,
-      refreshToken,
-    };
+    return { accessToken, refreshToken };
   }
 
-  async logout(userId: string) {
-    // Передаем null, чтобы затереть хэш в базе
-    await this.usersService.updateRefreshToken(userId, null);
+  async logout(userId: string, sessionId: string) {
+    await this.redisService.deleteSession(userId, sessionId);
   }
 
   async refreshTokens(refreshToken: string) {
@@ -131,55 +146,62 @@ export class AuthService {
         },
       );
 
-      const user = await this.usersService.findFullById(payload.sub);
+      const userId = payload.sub;
+      const sessionId = payload.sessionId;
 
-      if (!user || !user.refreshTokenHash) {
-        throw new UnauthorizedException('Доступ запрещен');
+      const sessionData = await this.redisService.getSession(sessionId);
+
+      if (!sessionData) {
+        throw new UnauthorizedException('Сессия не найдена или завершена');
       }
 
-      // 3. Сравниваем токен из куки с хэшем из базы (защита от кражи)
-      const isRefreshTokenValid = await argon2.verify(
-        user.refreshTokenHash,
+      const isTokenValid = await argon2.verify(
+        sessionData.refreshTokenHash,
         refreshToken,
       );
-
-      if (!isRefreshTokenValid) {
+      if (!isTokenValid) {
         throw new UnauthorizedException('Невалидный токен');
       }
-      const tokens = await this.getTokens(user.id, user.email, user.role);
 
-      await this.updateRefreshToken(user.id, tokens.refreshToken);
+      const user = await this.usersService.findFullById(userId);
+      if (!user) {
+        throw new UnauthorizedException('Пользователь не найден');
+      }
+
+      const tokens = await this.getTokens(
+        user.id,
+        user.email,
+        user.role,
+        sessionId,
+      );
+      const newHash = await argon2.hash(tokens.refreshToken);
+      const expiresInSec = 7 * 24 * 60 * 60;
+
+      await this.redisService.updateSession(sessionId, newHash, expiresInSec);
 
       return tokens;
     } catch (e) {
-      // Если токен протух физически (прошло 7 дней) или подделан
       throw new UnauthorizedException('Токен недействителен', e);
     }
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
-    // 1. Достаем юзера со ВСЕМИ полями (помнишь, мы делали findFullById?)
     const user = await this.usersService.findFullById(userId);
 
     if (!user || !user.passwordHash) {
       throw new UnauthorizedException('Пользователь не найден');
     }
 
-    // 2. Проверяем, совпадает ли старый пароль с текущим хэшем в базе
     const isOldPasswordValid = await argon2.verify(
       user.passwordHash,
       dto.oldPassword,
     );
 
     if (!isOldPasswordValid) {
-      // Выкидываем BadRequest, текст которого поймает наш фронтенд!
       throw new BadRequestException('Неверный текущий пароль');
     }
 
-    // 3. Хэшируем новый пароль
     const newPasswordHash = await argon2.hash(dto.newPassword);
-
-    // 4. Сохраняем новый хэш в базу
     await this.usersService.updatePassword(user.id, newPasswordHash);
   }
 }

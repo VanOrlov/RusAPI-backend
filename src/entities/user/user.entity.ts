@@ -60,9 +60,6 @@ export class User {
   @Column({ nullable: true })
   providerId: string;
 
-  @Column({ type: 'varchar', nullable: true })
-  refreshTokenHash: string | null;
-
   // ==========================================
   // БЛОК 2: БЕЗОПАСНОСТЬ И ВОССТАНОВЛЕНИЕ
   // ==========================================

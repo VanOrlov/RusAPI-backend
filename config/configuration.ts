@@ -4,7 +4,7 @@ export const configuration = () => ({
   db: {
     type: 'postgres',
     host: 'localhost',
-    port: 5432,
+    port: 5433,
     username: 'ivanorlov',
     password: 'postgres',
     database: 'rusapi',
@@ -13,7 +13,6 @@ export const configuration = () => ({
     synchronize: true,
   },
   jwt: {
-    // В продакшене обязательно выноси в .env!
     accessSecret: process.env.JWT_ACCESS_SECRET || 'super-secret-access-key',
     refreshSecret: process.env.JWT_REFRESH_SECRET || 'super-secret-refresh-key',
   },
