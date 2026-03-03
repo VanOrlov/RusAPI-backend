@@ -73,13 +73,7 @@ export class AuthController {
       throw new NotFoundException('Пользователь не найден');
     }
 
-    return this.authService.login(
-      user.id,
-      user.email,
-      user.role,
-      ip,
-      userAgent || '',
-    );
+    return this.authService.login(user, ip, userAgent || '');
   }
 
   @SkipThrottle()

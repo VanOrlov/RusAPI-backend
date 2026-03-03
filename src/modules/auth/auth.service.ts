@@ -59,21 +59,20 @@ export class AuthService {
     };
   }
 
-  async login(
-    userId: string,
-    email: string,
-    role: string,
-    ip: string,
-    userAgent: string,
-  ) {
+  async login(user: Omit<User, 'passwordHash'>, ip: string, userAgent: string) {
     const sessionId = uuidv4();
-    const tokens = await this.getTokens(userId, email, role, sessionId);
+    const tokens = await this.getTokens(
+      user.id,
+      user.email,
+      user.role,
+      sessionId,
+    );
 
     const hash = await argon2.hash(tokens.refreshToken);
     const expiresInSec = 7 * 24 * 60 * 60;
 
     await this.redisService.createSession(
-      userId,
+      user.id,
       sessionId,
       hash,
       ip,
@@ -81,14 +80,15 @@ export class AuthService {
       expiresInSec,
     );
 
-    const user = await this.usersService.userRepository.findOne({
-      where: { id: userId },
-    });
-
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      user: { id: userId, email, role, name: user?.name },
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        name: user.name,
+      },
     };
   }
 
