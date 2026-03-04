@@ -2,15 +2,15 @@ import { Global, Module } from '@nestjs/common';
 import Redis from 'ioredis';
 import { RedisService } from './redis.service';
 
-@Global() // Делаем глобальным, чтобы легко использовать в AuthModule
+@Global()
 @Module({
   providers: [
     {
       provide: 'REDIS_CLIENT',
       useFactory: () => {
         return new Redis({
-          host: 'localhost', // потом можно вынести в .env
-          port: 6379,
+          host: process.env.REDIS_HOST,
+          port: parseInt(process.env.REDIS_PORT!, 10),
         });
       },
     },
