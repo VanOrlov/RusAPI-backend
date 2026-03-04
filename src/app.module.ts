@@ -32,25 +32,22 @@ import { RedisModule } from './modules/redis/redis.module';
     }),
 
     // Настройка Rate Limiting через Redis
-    ThrottlerModule.forRoot({
-      throttlers: [
-        {
-          name: 'short',
-          ttl: 1000,
-          limit: 10,
-        },
-        {
-          name: 'default',
-          ttl: 10000,
-          limit: 100,
-        },
-      ],
-      storage: new ThrottlerStorageRedisService(
-        new Redis({
-          host: 'localhost',
-          port: 6379,
-        }),
-      ),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        throttlers: [
+          { name: 'short', ttl: 1000, limit: 10 },
+          { name: 'default', ttl: 10000, limit: 100 },
+        ],
+        storage: new ThrottlerStorageRedisService(
+          new Redis({
+            // Берем хост и порт из твоего конфига или напрямую из .env
+            host: process.env.REDIS_HOST,
+            port: parseInt(process.env.REDIS_PORT!, 10),
+          }),
+        ),
+      }),
     }),
 
     UserModule,
