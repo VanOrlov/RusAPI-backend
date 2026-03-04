@@ -53,10 +53,15 @@ export class ResourceService {
       );
     }
 
-    // 3. Создаем новый ресурс
     const newResource = this.resourceRepository.create({
       name: dto.name,
-      schema: [],
+      // Всегда добавляем id с типом uuid
+      schema: [
+        {
+          name: 'id',
+          type: 'string.uuid',
+        },
+      ],
       data: [],
       project: { id: project.id },
     });
@@ -87,27 +92,27 @@ export class ResourceService {
     userId: string,
     dto: UpdateSchemaDto,
   ): Promise<Resource> {
-    // 1. Ищем ресурс и подтягиваем его проект и владельца проекта
     const resource = await this.resourceRepository.findOne({
       where: { id: resourceId },
-      relations: ['project', 'project.user'], // Магия TypeORM для проверки прав
+      relations: ['project', 'project.user'],
     });
 
     if (!resource) {
       throw new NotFoundException('Эндпоинт не найден');
     }
 
-    // 2. Строгая проверка безопасности
     if (resource.project.user.id !== userId) {
       throw new ForbiddenException(
         'У вас нет прав на редактирование этого эндпоинта',
       );
     }
 
-    // 3. Обновляем схему
+    if (!dto.schema.length) {
+      throw new BadRequestException('Нельзя оставить схему пустой');
+    }
+
     resource.schema = dto.schema;
 
-    // 4. Сохраняем и возвращаем обновленный ресурс
     return await this.resourceRepository.save(resource);
   }
 
