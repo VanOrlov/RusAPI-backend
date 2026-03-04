@@ -54,7 +54,7 @@ jobs:
             echo "DB_USER=ivanorlov_prod" >> .env
             echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
             echo "DB_NAME=rusapi_prod" >> .env
-            echo "DB_SYNC=true" >> .env
+            echo "DB_SYNC=false" >> .env
             echo "REDIS_HOST=redis" >> .env
             echo "REDIS_PORT=6379" >> .env
             echo "PORT=3000" >> .env
