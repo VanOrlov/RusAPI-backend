@@ -65,4 +65,4 @@ jobs:
             docker compose pull backend
 
             # 4. Перезапускаем контейнеры (Докер сам поймет, что обновился только бэкенд, и не тронет базу)
-            docker compose up -d
+            docker compose up -d backend
