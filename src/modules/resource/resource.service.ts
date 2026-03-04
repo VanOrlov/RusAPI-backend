@@ -149,7 +149,6 @@ export class ResourceService {
       for (const field of schema) {
         try {
           const parts = field.type.split('.');
-          // Подсказываем TS, что первая часть — это валидный ключ объекта faker
           const category = parts[0] as keyof typeof faker;
           const method = parts[1];
 

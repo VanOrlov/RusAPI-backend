@@ -1,21 +1,45 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { NestApplicationOptions } from '@nestjs/common';
+import { NestApplicationOptions, ValidationPipe } from '@nestjs/common';
 
-import * as fs from 'fs';
 import cookieParser from 'cookie-parser';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { Request } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  app.enableCors({
-    origin: true,
-    credentials: true,
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  app.enableCors((req: Request, callback) => {
+    const origin = req.header('Origin');
+    const url = req.url;
+
+    if (url.includes('/mock/')) {
+      return callback(null, {
+        origin: true,
+        credentials: true,
+      });
+    }
+
+    const allowedOrigin = process.env.FRONTEND_URL;
+
+    if (!origin || origin === allowedOrigin) {
+      return callback(null, {
+        origin: true,
+        credentials: true,
+      });
+    }
+
+    // 3. Блокируем всех чужаков, которые лезут не в моки, а в админку
+    return callback(new Error('Not allowed by CORS'), { origin: false });
   });
   app.setGlobalPrefix('api');
   app.use(cookieParser());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+    }),
+  );
   app.set('trust proxy', 1);
   await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }
