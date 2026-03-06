@@ -12,6 +12,7 @@ import { Project } from '../project/entities/project.entity';
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { UpdateSchemaDto } from './dto/update-schema.dto';
 import { faker } from '@faker-js/faker';
+import { validateDefaultIdInSchema } from './utils/validateSchema.utils';
 
 @Injectable()
 export class ResourceService {
@@ -111,6 +112,13 @@ export class ResourceService {
       throw new BadRequestException('Нельзя оставить схему пустой');
     }
 
+    if (dto.schema.length > 50) {
+      throw new BadRequestException('Максимальное кол-во полей: 50');
+    }
+
+    const validateFirstEl = validateDefaultIdInSchema(dto.schema);
+    if (!validateFirstEl)
+      throw new BadRequestException('Первый элемент всегда должен быть uuid ');
     resource.schema = dto.schema;
 
     return await this.resourceRepository.save(resource);
