@@ -6,8 +6,8 @@ import {
   Req,
   UseGuards,
   Param,
+  Delete,
 } from '@nestjs/common';
-import { Request } from 'express';
 import { ProjectService } from './project.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { AuthGuard } from '@nestjs/passport';
@@ -38,5 +38,11 @@ export class ProjectController {
   async findOne(@Req() req: AuthRequest, @Param('id') id: string) {
     const userId = req.user.id;
     return await this.projectService.findOne(id, userId);
+  }
+
+  @Delete(':id')
+  async remove(@Req() req: AuthRequest, @Param('id') id: string) {
+    const userId = req.user.id;
+    return await this.projectService.remove(id, userId);
   }
 }

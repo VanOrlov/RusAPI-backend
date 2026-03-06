@@ -9,7 +9,6 @@ import {
   ManyToOne,
   OneToMany,
 } from 'typeorm';
-// ВНИМАНИЕ: Поправь этот путь до твоего файла user.entity.ts!
 
 @Entity('projects')
 export class Project {

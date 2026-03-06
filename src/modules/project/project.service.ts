@@ -51,4 +51,17 @@ export class ProjectService {
 
     return project;
   }
+
+  async remove(id: string, userId: string): Promise<void> {
+    const result = await this.projectRepository.delete({
+      id: id,
+      user: { id: userId },
+    });
+
+    if (result.affected === 0) {
+      throw new NotFoundException(
+        'Проект не найден или у вас нет прав на его удаление',
+      );
+    }
+  }
 }
