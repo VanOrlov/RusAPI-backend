@@ -5,8 +5,15 @@ import { NestApplicationOptions, ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Request } from 'express';
+import * as fs from 'fs';
 
 async function bootstrap() {
+  // const config: NestApplicationOptions = {
+  //   httpsOptions: {
+  //     key: fs.readFileSync('./localhost-key.pem'),
+  //     cert: fs.readFileSync('./localhost.pem'),
+  //   },
+  // };
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.enableCors((req: Request, callback) => {
@@ -19,7 +26,6 @@ async function bootstrap() {
         credentials: true,
       });
     }
-
     const allowedOrigin = process.env.FRONTEND_URL;
 
     if (!origin || origin === allowedOrigin) {

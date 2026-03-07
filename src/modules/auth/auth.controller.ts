@@ -68,6 +68,7 @@ export class AuthController {
     @Body() loginDto: LoginDto,
     @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
+    @Res({ passthrough: true }) res: Response,
   ) {
     const user = await this.authService.validateUser(
       loginDto.email,
@@ -77,7 +78,16 @@ export class AuthController {
       throw new NotFoundException('Пользователь не найден');
     }
 
-    return this.authService.login(user, ip, userAgent || '');
+    const authData = await this.authService.login(user, ip, userAgent || '');
+
+    res.cookie('refreshToken', authData.refreshToken, {
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: 'none',
+      secure: true,
+    });
+
+    return { accessToken: authData.accessToken, user: authData.user };
   }
 
   @SkipThrottle()
@@ -139,7 +149,6 @@ export class AuthController {
     }
 
     try {
-      // Пытаемся обновить токены
       const tokens = await this.authService.refreshTokens(refreshToken);
 
       res.cookie('refreshToken', tokens.refreshToken, {

@@ -109,8 +109,6 @@ export class AuthService {
     return null;
   }
 
-  // МЕТОД updateRefreshToken ПОЛНОСТЬЮ УДАЛЕН - он больше не нужен
-
   async getTokens(
     userId: string,
     email: string,
