@@ -25,7 +25,7 @@ export class Resource {
 
   // Сгенерированные данные для эндпоинта (JSON массив)
   @Column({ type: 'jsonb', default: [] })
-  data: any;
+  data: { id: string; [k: string]: any }[];
 
   // Связь с проектом. Удаляем проект -> удаляются ресурсы
   @ManyToOne(() => Project, (project) => project.resources, {

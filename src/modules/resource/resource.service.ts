@@ -149,10 +149,10 @@ export class ResourceService {
       throw new BadRequestException('Схема пуста. Сначала добавьте поля.');
     }
 
-    const generatedArray: Record<string, unknown>[] = [];
+    const generatedArray: Resource['data'] = [];
 
     for (let i = 0; i < count; i++) {
-      const mockObject: Record<string, unknown> = {};
+      const mockObject: Resource['data'][number] = { id: '' };
 
       for (const field of schema) {
         try {
@@ -170,7 +170,6 @@ export class ResourceService {
             const generateValue = //@ts-ignore
               (fakerCategory as Record<string, () => unknown>)[method];
 
-            // Теперь TS и ESLint довольны: мы вызываем типизированную функцию
             mockObject[field.name] = generateValue();
           } else {
             mockObject[field.name] = 'Неизвестный тип';

@@ -14,6 +14,18 @@ export class MockController {
     @Param('nanoId') nanoId: string,
     @Param('resourceName') resourceName: string,
   ) {
-    return await this.mockService.getMockData(nanoId, resourceName);
+    return await this.mockService.getAll(nanoId, resourceName);
+  }
+
+  @Throttle({
+    short: { limit: 5, ttl: 1000 },
+  })
+  @Get(':nanoId/:resourceName/:id')
+  async getOneResource(
+    @Param('nanoId') nanoId: string,
+    @Param('resourceName') resourceName: string,
+    @Param('id') id: string,
+  ) {
+    return await this.mockService.getOne(nanoId, resourceName, id);
   }
 }

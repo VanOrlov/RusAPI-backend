@@ -1,8 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Project } from '../project/entities/project.entity';
 import { Resource } from '../resource/entities/resource.entity';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class MockService {
@@ -13,8 +18,11 @@ export class MockService {
     private readonly resourceRepository: Repository<Resource>,
   ) {}
 
-  async getMockData(projectNanoId: string, resourceName: string): Promise<any> {
-    // 1. Ищем проект по короткому ID
+  // Приватный метод (DRY), чтобы не писать этот код в каждом запросе
+  private async getResourceOrThrow(
+    projectNanoId: string,
+    resourceName: string,
+  ): Promise<Resource> {
     const project = await this.projectRepository.findOne({
       where: { nanoId: projectNanoId },
     });
@@ -23,7 +31,6 @@ export class MockService {
       throw new NotFoundException(`Проект с ID '${projectNanoId}' не найден`);
     }
 
-    // 2. Ищем ресурс (эндпоинт) по имени, привязанный к этому проекту
     const resource = await this.resourceRepository.findOne({
       where: {
         name: resourceName,
@@ -37,7 +44,83 @@ export class MockService {
       );
     }
 
-    // 3. Отдаем моковые данные. Если их пока нет, отдаем пустой массив
-    return resource.data || [];
+    // Защита от null, если данные еще не генерировались
+    if (!resource.data) {
+      resource.data = [];
+    }
+
+    return resource;
+  }
+
+  async getAll(nanoId: string, resourceName: string) {
+    const resource = await this.getResourceOrThrow(nanoId, resourceName);
+    return resource.data;
+  }
+
+  async getOne(nanoId: string, resourceName: string, id: string) {
+    const resource = await this.getResourceOrThrow(nanoId, resourceName);
+    const item = resource.data.find((el: any) => el.id === id);
+
+    if (!item) {
+      throw new NotFoundException(`Объект с id '${id}' не найден`);
+    }
+    return item;
+  }
+
+  async create(
+    nanoId: string,
+    resourceName: string,
+    body: Record<string, any>,
+  ) {
+    const resource = await this.getResourceOrThrow(nanoId, resourceName);
+
+    if (resource.data.length >= 100) {
+      throw new BadRequestException(
+        'Достигнут лимит: в одном эндпоинте не может быть больше 100 записей.',
+      );
+    }
+
+    const newItem = { id: uuidv4(), ...body };
+
+    resource.data.unshift(newItem);
+
+    // Сохраняем в БД
+    await this.resourceRepository.save(resource);
+
+    return newItem;
+  }
+
+  async update(
+    nanoId: string,
+    resourceName: string,
+    id: string,
+    body: Record<string, any>,
+  ) {
+    const resource = await this.getResourceOrThrow(nanoId, resourceName);
+    const index = resource.data.findIndex((el: any) => el.id === id);
+
+    if (index === -1) {
+      throw new NotFoundException(`Объект с id '${id}' не найден`);
+    }
+
+    resource.data[index] = { ...resource.data[index], ...body, id };
+
+    await this.resourceRepository.save(resource);
+
+    return resource.data[index];
+  }
+
+  async remove(nanoId: string, resourceName: string, id: string) {
+    const resource = await this.getResourceOrThrow(nanoId, resourceName);
+    const initialLength = resource.data.length;
+
+    resource.data = resource.data.filter((el: any) => el.id !== id);
+
+    if (resource.data.length === initialLength) {
+      throw new NotFoundException(`Объект с id '${id}' не найден`);
+    }
+
+    await this.resourceRepository.save(resource);
+    return { success: true };
   }
 }
