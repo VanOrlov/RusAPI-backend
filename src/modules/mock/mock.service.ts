@@ -98,34 +98,54 @@ export class MockService {
     nanoId: string,
     resourceName: string,
     id: string,
-    body: Record<string, any>,
+    body: Record<string, unknown>,
   ) {
+    this.validateBodyStructure(body);
+
     const resource = await this.getResourceOrThrow(nanoId, resourceName);
-    const index = resource.data.findIndex((el: any) => el.id === id);
+
+    if (!resource.data) {
+      throw new NotFoundException(`Объект с id '${id}' не найден`);
+    }
+
+    const itemIndex = resource.data.findIndex((el: any) => el.id === id);
+    if (itemIndex === -1) {
+      throw new NotFoundException(`Объект с id '${id}' не найден`);
+    }
+
+    // ставим старый id в конце чтобы клиент никак не мог его перезаписать
+    const existingItem = resource.data[itemIndex];
+    const mergedData = { ...existingItem, ...body, id: existingItem.id };
+
+    const schemaFields = resource.schema;
+    const sanitizedItem = this.sanitizeAndValidatePayload(
+      schemaFields,
+      mergedData,
+      false,
+    );
+
+    sanitizedItem.id = existingItem.id;
+
+    resource.data[itemIndex] = sanitizedItem;
+    await this.resourceRepository.save(resource);
+
+    return sanitizedItem;
+  }
+
+  async remove(nanoId: string, resourceName: string, id: string) {
+    const resource = await this.getResourceOrThrow(nanoId, resourceName);
+
+    const index = resource.data.findIndex(
+      (el: Resource['data'][number]) => el.id === id,
+    );
 
     if (index === -1) {
       throw new NotFoundException(`Объект с id '${id}' не найден`);
     }
 
-    resource.data[index] = { ...resource.data[index], ...body, id };
+    resource.data.splice(index, 1);
 
     await this.resourceRepository.save(resource);
-
-    return resource.data[index];
-  }
-
-  async remove(nanoId: string, resourceName: string, id: string) {
-    const resource = await this.getResourceOrThrow(nanoId, resourceName);
-    const initialLength = resource.data.length;
-
-    resource.data = resource.data.filter((el: any) => el.id !== id);
-
-    if (resource.data.length === initialLength) {
-      throw new NotFoundException(`Объект с id '${id}' не найден`);
-    }
-
-    await this.resourceRepository.save(resource);
-    return { success: true };
   }
 
   /**

@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Put,
+} from '@nestjs/common';
 import { MockService } from './mock.service';
 import { Throttle } from '@nestjs/throttler';
 
@@ -39,5 +50,28 @@ export class MockController {
     @Body() body: Record<string, unknown>,
   ) {
     return await this.mockService.create(nanoId, resourceName, body);
+  }
+
+  @Throttle({ short: { limit: 5, ttl: 1000 } })
+  @Put(':nanoId/:resourceName/:id')
+  @Patch(':nanoId/:resourceName/:id')
+  async update(
+    @Param('nanoId') nanoId: string,
+    @Param('resourceName') resourceName: string,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return await this.mockService.update(nanoId, resourceName, id, body);
+  }
+
+  @Throttle({ short: { limit: 5, ttl: 1000 } })
+  @Delete(':nanoId/:resourceName/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(
+    @Param('nanoId') nanoId: string,
+    @Param('resourceName') resourceName: string,
+    @Param('id') id: string,
+  ) {
+    await this.mockService.remove(nanoId, resourceName, id);
   }
 }
