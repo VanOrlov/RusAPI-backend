@@ -121,7 +121,11 @@ export class ResourceService {
       throw new BadRequestException('Первый элемент всегда должен быть uuid ');
     resource.schema = dto.schema;
 
-    return await this.resourceRepository.save(resource);
+    const result = await this.resourceRepository.save(resource);
+
+    await this.generateData(resourceId, userId, 10);
+
+    return result;
   }
 
   async generateData(
