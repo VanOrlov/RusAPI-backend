@@ -18,7 +18,6 @@ export class MockService {
     private readonly resourceRepository: Repository<Resource>,
   ) {}
 
-  // Приватный метод (DRY), чтобы не писать этот код в каждом запросе
   private async getResourceOrThrow(
     projectNanoId: string,
     resourceName: string,
@@ -70,24 +69,29 @@ export class MockService {
   async create(
     nanoId: string,
     resourceName: string,
-    body: Record<string, any>,
+    body: Record<string, unknown>,
   ) {
+    this.validateBodyStructure(body);
+
     const resource = await this.getResourceOrThrow(nanoId, resourceName);
 
-    if (resource.data.length >= 100) {
+    if (resource.data && resource.data.length >= 100) {
       throw new BadRequestException(
-        'Достигнут лимит: в одном эндпоинте не может быть больше 100 записей.',
+        'Превышен лимит: в эндпоинте не может быть больше 100 записей.',
       );
     }
 
-    const newItem = { id: uuidv4(), ...body };
+    const schemaFields = resource.schema || [];
+    const sanitizedItem = this.sanitizeAndValidatePayload(
+      schemaFields,
+      body,
+      true,
+    );
 
-    resource.data.unshift(newItem);
-
-    // Сохраняем в БД
+    resource.data.unshift(sanitizedItem);
     await this.resourceRepository.save(resource);
 
-    return newItem;
+    return sanitizedItem;
   }
 
   async update(
@@ -122,5 +126,114 @@ export class MockService {
 
     await this.resourceRepository.save(resource);
     return { success: true };
+  }
+
+  /**
+   * Определяет ожидаемый базовый тип данных JavaScript на основе типа генератора Faker.js.
+   * Эта функция помогает маппить специфичные типы Faker (например, 'internet.email' или 'number.int')
+   * на стандартные примитивы для валидации входящих JSON-запросов.
+   *
+   * @param {string} fakerType - Строка с типом генератора из Faker.js (например, 'date.past', 'person.firstName').
+   * @returns {string} Строковое представление типа ('string', 'number', 'boolean' или 'array').
+   */
+  private getExpectedJsType(fakerType: string): string {
+    if (!fakerType) return 'string';
+
+    const [category, method] = fakerType.split('.');
+
+    if (category === 'number') return 'number';
+
+    if (category === 'datatype' && method === 'boolean') return 'boolean';
+
+    if (method && method.toLowerCase().includes('array')) return 'array';
+
+    if (category === 'date') return 'string';
+
+    return 'string';
+  }
+
+  /**
+   * Проверяет базовую структуру входящего тела запроса.
+   * Убеждается, что клиент прислал валидный, непустой JSON-объект.
+   *
+   * @param {Record<string, unknown>} body - Входящее тело запроса от клиента.
+   * @throws {BadRequestException} Если body пустое, является массивом, null или не имеет ключей.
+   */
+  private validateBodyStructure(body: Record<string, unknown>): void {
+    if (
+      !body ||
+      typeof body !== 'object' ||
+      Array.isArray(body) ||
+      Object.keys(body).length === 0
+    ) {
+      throw new BadRequestException(
+        'Тело запроса (body) должно быть непустым JSON-объектом.',
+      );
+    }
+  }
+
+  /**
+   * Пропускает входящие данные через "сито" схемы ресурса.
+   * Отбрасывает незаявленные поля, заполняет недостающие поля значением `null`
+   * и выполняет строгую проверку типов для переданных значений.
+   *
+   * @param {Resource['schema']} schemaFields - Массив конфигураций полей из схемы БД.
+   * @param {Record<string, unknown>} body - Данные, присланные клиентом.
+   * @param {boolean} isCreate - Флаг создания. Если true, принудительно генерирует новый UUID для поля 'id'.
+   * @returns {Resource['data'][number]} Очищенный и провалидированный объект, полностью соответствующий схеме.
+   * @throws {BadRequestException} Если тип переданного значения не совпадает с ожидаемым типом из схемы.
+   */
+  private sanitizeAndValidatePayload(
+    schemaFields: Resource['schema'],
+    body: Record<string, unknown>,
+    isCreate: boolean,
+  ): Resource['data'][number] {
+    const sanitizedItem: Record<string, any> = {};
+
+    if (isCreate) {
+      sanitizedItem['id'] = uuidv4();
+    }
+
+    for (const field of schemaFields) {
+      const fieldName = field.name;
+
+      if (fieldName === 'id') {
+        continue;
+      }
+
+      const clientValue = body[fieldName];
+
+      if (clientValue === undefined) {
+        sanitizedItem[fieldName] = null;
+        continue;
+      }
+
+      if (clientValue !== null) {
+        const expectedType = this.getExpectedJsType(field.type);
+        const actualType = Array.isArray(clientValue)
+          ? 'array'
+          : typeof clientValue;
+
+        if (actualType !== expectedType) {
+          throw new BadRequestException(
+            `Ошибка валидации: Поле '${fieldName}' ожидает тип '${expectedType}', но получено '${actualType}'.`,
+          );
+        }
+
+        if (field.type.startsWith('date.')) {
+          const isDateValid = !isNaN(Date.parse(clientValue as string));
+
+          if (!isDateValid) {
+            throw new BadRequestException(
+              `Ошибка валидации: Поле '${fieldName}' должно быть валидной датой (ISO 8601), получено: ${JSON.stringify(clientValue)}.`,
+            );
+          }
+        }
+      }
+
+      sanitizedItem[fieldName] = clientValue;
+    }
+
+    return sanitizedItem as Resource['data'][number];
   }
 }
