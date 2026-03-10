@@ -8,13 +8,18 @@ import { Request } from 'express';
 import * as fs from 'fs';
 
 async function bootstrap() {
-  // const config: NestApplicationOptions = {
-  //   httpsOptions: {
-  //     key: fs.readFileSync('./localhost-key.pem'),
-  //     cert: fs.readFileSync('./localhost.pem'),
-  //   },
-  // };
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const config: NestApplicationOptions = process.env.USE_HTTPS
+    ? {
+        httpsOptions: {
+          key: fs.readFileSync('./localhost-key.pem'),
+          cert: fs.readFileSync('./localhost.pem'),
+        },
+      }
+    : {};
+  const app = await NestFactory.create<NestExpressApplication>(
+    AppModule,
+    config,
+  );
 
   app.enableCors((req: Request, callback) => {
     const origin = req.header('Origin');

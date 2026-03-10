@@ -12,6 +12,7 @@ import { Project } from '../project/entities/project.entity';
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { UpdateSchemaDto } from './dto/update-schema.dto';
 import { faker } from '@faker-js/faker';
+import { defaultSchema } from './constants';
 import { validateDefaultIdInSchema } from './utils/validateSchema.utils';
 
 @Injectable()
@@ -56,13 +57,8 @@ export class ResourceService {
 
     const newResource = this.resourceRepository.create({
       name: dto.name,
-      // Всегда добавляем id с типом uuid
-      schema: [
-        {
-          name: 'id',
-          type: 'string.uuid',
-        },
-      ],
+      // Всегда добавляем id (uuid) и createdAt (date.recent из faker)
+      schema: [...defaultSchema],
       data: [],
       project: { id: project.id },
     });
